@@ -42,7 +42,10 @@ function gradeFor(pct) {
   return { grade: "F", note: "Needs Improvement" };
 }
 
-// A simple stylised leaf, drawn with bezier curves, used as a recurring motif.
+// ---------------------------------------------------------------------------
+// Decorative motifs
+// ---------------------------------------------------------------------------
+
 function drawLeaf(doc, x, y, size, angle, color, opacity) {
   doc.save();
   doc.translate(x, y).rotate(angle);
@@ -70,6 +73,84 @@ function drawWatermarkSprig(doc, cx, cy, scale) {
   }
   doc.restore();
   doc.opacity(1);
+}
+
+// A single plant cell: rounded wall, nucleus, a few organelle dots.
+// Purely decorative background texture — kept very low-opacity.
+function drawCell(doc, cx, cy, r, color, opacity) {
+  doc.save();
+  doc.opacity(opacity !== undefined ? opacity : 1);
+  doc
+    .roundedRect(cx - r, cy - r * 0.8, r * 2, r * 1.6, r * 0.5)
+    .lineWidth(1.1)
+    .stroke(color);
+  doc
+    .circle(cx - r * 0.15, cy - r * 0.05, r * 0.32)
+    .lineWidth(1)
+    .stroke(color);
+  doc.circle(cx - r * 0.15, cy - r * 0.05, r * 0.1).fill(color);
+  const dots = [
+    [r * 0.4, r * 0.35],
+    [-r * 0.55, r * 0.3],
+    [r * 0.15, -r * 0.45],
+    [r * 0.55, -r * 0.1],
+  ];
+  dots.forEach(([dx, dy]) => {
+    doc.circle(cx + dx, cy + dy, r * 0.06).fill(color);
+  });
+  doc.restore();
+  doc.opacity(1);
+}
+
+// A short run of DNA double-helix: two interleaved sine strands with
+// connecting base-pair rungs. Oriented vertically.
+function drawDNAHelix(doc, x, yTop, height, amplitude, turns, color, opacity) {
+  doc.save();
+  doc.opacity(opacity !== undefined ? opacity : 1);
+  const steps = 60;
+  const rungEvery = Math.floor(steps / (turns * 6));
+  const strandA = [];
+  const strandB = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const yy = yTop + t * height;
+    const phase = t * turns * Math.PI * 2;
+    strandA.push([x + Math.sin(phase) * amplitude, yy]);
+    strandB.push([x + Math.sin(phase + Math.PI) * amplitude, yy]);
+  }
+  for (let i = 0; i < strandA.length; i += Math.max(rungEvery, 4)) {
+    doc
+      .moveTo(strandA[i][0], strandA[i][1])
+      .lineTo(strandB[i][0], strandB[i][1])
+      .lineWidth(1)
+      .strokeOpacity(0.6)
+      .stroke(color);
+  }
+  [strandA, strandB].forEach((strand) => {
+    doc.moveTo(strand[0][0], strand[0][1]);
+    for (let i = 1; i < strand.length; i++) {
+      doc.lineTo(strand[i][0], strand[i][1]);
+    }
+    doc.lineWidth(2).strokeOpacity(1).stroke(color);
+  });
+  doc.restore();
+  doc.opacity(1);
+}
+
+// Full decorative backdrop for a page: faint DNA strands down the edges,
+// a scatter of cells, and leaf sprigs. Kept very low-opacity so it reads
+// as texture, not clutter, and never competes with foreground content.
+function drawPageBackdrop(doc, pageWidth, pageHeight) {
+  drawDNAHelix(doc, pageWidth - 34, 150, pageHeight - 300, 13, 5, FOREST, 0.07);
+  drawDNAHelix(doc, 26, 170, pageHeight - 340, 10, 4, GOLD_DARK, 0.06);
+
+  drawCell(doc, 95, 250, 30, FOREST, 0.06);
+  drawCell(doc, pageWidth - 110, 420, 24, LEAF, 0.06);
+  drawCell(doc, 70, pageHeight - 260, 26, GOLD_DARK, 0.05);
+  drawCell(doc, pageWidth - 90, pageHeight - 340, 20, FOREST, 0.05);
+
+  drawWatermarkSprig(doc, pageWidth - 90, 260, 1.4);
+  drawWatermarkSprig(doc, 70, pageHeight - 200, 1.2);
 }
 
 function sectionHeading(doc, text, x, y, width) {
@@ -124,6 +205,24 @@ function drawTableRow(doc, cols, x, y, colWidths, opts = {}) {
   return y + rowHeight;
 }
 
+// Renders a single "LABEL / value" pair at a fixed top-left position and
+// returns how tall the value ended up (it may wrap to 2 lines on long
+// text, e.g. school names) so callers can size rows correctly instead of
+// using a fixed increment that risks overlap — this was the root cause
+// of the overflow in the previous layout.
+function drawDetailField(doc, label, value, x, y, width) {
+  doc
+    .font("Body-Bold")
+    .fontSize(8.5)
+    .fillColor(MUTED)
+    .text(String(label).toUpperCase(), x, y, { characterSpacing: 0.4 });
+  doc
+    .font("Body")
+    .fontSize(10.5)
+    .fillColor(INK)
+    .text(String(value || "—"), x, y + 13, { width });
+}
+
 async function buildReportCardBuffer({
   student,
   marksRows,
@@ -140,21 +239,32 @@ async function buildReportCardBuffer({
   );
 
   const pageWidth = doc.page.width;
+  const pageHeight = doc.page.height;
   const margin = 42;
   const contentWidth = pageWidth - margin * 2;
 
   // ---- Background & header banner ----
-  doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
+  doc.rect(0, 0, pageWidth, pageHeight).fill(CREAM);
+  drawPageBackdrop(doc, pageWidth, pageHeight);
   doc.rect(0, 0, pageWidth, 132).fill(FOREST);
   doc.rect(0, 128, pageWidth, 4).fill(GOLD);
 
-  drawWatermarkSprig(doc, pageWidth - 90, 260, 1.4);
-  drawWatermarkSprig(doc, 70, doc.page.height - 200, 1.2);
+  // A faint DNA strand woven into the header band for a biology accent.
+  drawDNAHelix(doc, pageWidth - 200, -10, 150, 9, 2.4, GOLD, 0.16);
 
   // Emblem: institute logo in the header
-  const logoPath = path.join(__dirname, "..", "assets", "images", "institute-logo.jpeg");
+  const logoPath = path.join(
+    __dirname,
+    "..",
+    "assets",
+    "images",
+    "institute-logo.jpeg"
+  );
   doc.save();
-  doc.circle(margin + 30, 66, 27).lineWidth(2).stroke(GOLD);
+  doc
+    .circle(margin + 30, 66, 27)
+    .lineWidth(2)
+    .stroke(GOLD);
   doc.circle(margin + 30, 66, 27).clip();
   doc.image(logoPath, margin + 3, 39, { width: 54, height: 54 });
   doc.restore();
@@ -201,36 +311,67 @@ async function buildReportCardBuffer({
 
   let y = 160;
 
-  // Central emblem — Saraswati artwork, framed and centered, elegant divider
-  // between the header and the student details section.
-  const emblemPath = path.join(__dirname, "..", "assets", "images", "saraswati-emblem.jpeg");
+  // Central emblem — Saraswati artwork, framed and centered.
+  const emblemPath = path.join(
+    __dirname,
+    "..",
+    "assets",
+    "images",
+    "saraswati-emblem.jpeg"
+  );
   const emblemSize = 92;
   const emblemCx = pageWidth / 2;
   const emblemCy = y + emblemSize / 2;
   doc.save();
   doc.circle(emblemCx, emblemCy, emblemSize / 2 + 5).fill(WHITE);
-  doc.circle(emblemCx, emblemCy, emblemSize / 2 + 5).lineWidth(1.6).stroke(GOLD);
+  doc
+    .circle(emblemCx, emblemCy, emblemSize / 2 + 5)
+    .lineWidth(1.6)
+    .stroke(GOLD);
   doc.circle(emblemCx, emblemCy, emblemSize / 2).clip();
-  doc.image(
-    emblemPath,
-    emblemCx - emblemSize / 2,
-    emblemCy - emblemSize / 2,
-    { width: emblemSize, height: emblemSize }
-  );
+  doc.image(emblemPath, emblemCx - emblemSize / 2, emblemCy - emblemSize / 2, {
+    width: emblemSize,
+    height: emblemSize,
+  });
   doc.restore();
-  drawLeaf(doc, emblemCx - emblemSize / 2 - 22, emblemCy, 20, 200, GOLD_DARK, 0.8);
-  drawLeaf(doc, emblemCx + emblemSize / 2 + 2, emblemCy, 20, 20, GOLD_DARK, 0.8);
+  drawLeaf(
+    doc,
+    emblemCx - emblemSize / 2 - 22,
+    emblemCy,
+    20,
+    200,
+    GOLD_DARK,
+    0.8
+  );
+  drawLeaf(
+    doc,
+    emblemCx + emblemSize / 2 + 2,
+    emblemCy,
+    20,
+    20,
+    GOLD_DARK,
+    0.8
+  );
+
+  // Small cell flourishes flanking the emblem for a biology accent.
+  drawCell(doc, emblemCx - emblemSize / 2 - 60, emblemCy, 12, GOLD_DARK, 0.35);
+  drawCell(doc, emblemCx + emblemSize / 2 + 60, emblemCy, 12, GOLD_DARK, 0.35);
+
   y = emblemCy + emblemSize / 2 + 22;
 
   // ---- Student details card ----
   sectionHeading(doc, "Student Details", margin, y, contentWidth);
   y = doc.y + 4;
-  const cardH = 78;
-  doc
-    .roundedRect(margin, y, contentWidth, cardH, 8)
-    .fillAndStroke(WHITE, "#E1E8DC");
-  const colW = contentWidth / 2;
-  const rows = [
+
+  const cardX = margin;
+  const cardWidth = contentWidth;
+  const colW = cardWidth / 2;
+  const padX = 18;
+  const padTop = 16;
+  const rowGap = 12;
+  const fieldWidth = colW - padX - 14;
+
+  const fieldRows = [
     ["Name", student.name, "Class", student.class],
     ["School", student.school_name, "Guardian", student.guardian_name],
     [
@@ -240,32 +381,36 @@ async function buildReportCardBuffer({
       generatedFor,
     ],
   ];
-  let ry = y + 12;
-  rows.forEach((r) => {
-    doc
-      .font("Body-Bold")
-      .fontSize(8.5)
-      .fillColor(MUTED)
-      .text(r[0].toUpperCase(), margin + 16, ry, { characterSpacing: 0.4 });
-    doc
-      .font("Body")
-      .fontSize(10.5)
-      .fillColor(INK)
-      .text(String(r[1]), margin + 16, ry + 12, { width: colW - 32 });
-    doc
-      .font("Body-Bold")
-      .fontSize(8.5)
-      .fillColor(MUTED)
-      .text(r[2].toUpperCase(), margin + colW + 8, ry, {
-        characterSpacing: 0.4,
-      });
-    doc
-      .font("Body")
-      .fontSize(10.5)
-      .fillColor(INK)
-      .text(String(r[3]), margin + colW + 8, ry + 12, { width: colW - 32 });
-    ry += 21;
+
+  // Pre-measure each row's height (accounts for wrapped long values, like
+  // school names) so the card background and every field position below
+  // it are computed from real text height instead of a fixed guess.
+  doc.font("Body").fontSize(10.5);
+  const rowHeights = fieldRows.map((r) => {
+    const leftH = doc.heightOfString(String(r[1] || "—"), {
+      width: fieldWidth,
+    });
+    const rightH = doc.heightOfString(String(r[3] || "—"), {
+      width: fieldWidth,
+    });
+    return Math.max(leftH, rightH, 13);
   });
+  const cardH =
+    padTop * 2 +
+    rowHeights.reduce((a, h) => a + 13 + h, 0) +
+    rowGap * (fieldRows.length - 1);
+
+  doc
+    .roundedRect(cardX, y, cardWidth, cardH, 8)
+    .fillAndStroke(WHITE, "#E1E8DC");
+
+  let ry = y + padTop;
+  fieldRows.forEach((r, i) => {
+    drawDetailField(doc, r[0], r[1], cardX + padX, ry, fieldWidth);
+    drawDetailField(doc, r[2], r[3], cardX + colW + padX, ry, fieldWidth);
+    ry += 13 + rowHeights[i] + rowGap;
+  });
+
   y += cardH + 26;
 
   // ---- Performance record table ----
@@ -312,6 +457,8 @@ async function buildReportCardBuffer({
   // ---- Summary strip: total / percentage / grade badge ----
   const stripH = 62;
   doc.roundedRect(margin, y, contentWidth, stripH, 8).fill(FOREST);
+  drawCell(doc, margin + contentWidth * 0.55, y + stripH / 2, 20, WHITE, 0.05);
+
   doc
     .fillColor("#CFE0C9")
     .font("Body-Bold")
@@ -334,7 +481,6 @@ async function buildReportCardBuffer({
     .fontSize(17)
     .text(`${percentage.toFixed(2)}%`, margin + 220, y + 25);
 
-  // Grade badge (gold circle)
   const badgeCx = margin + contentWidth - 60;
   const badgeCy = y + stripH / 2;
   doc.circle(badgeCx, badgeCy, 26).fill(GOLD);
@@ -357,9 +503,10 @@ async function buildReportCardBuffer({
 
   // ---- Quiz performance (MCQ + DPP), chapter-wise ----
   if (chapterStats && chapterStats.length > 0) {
-    if (y > doc.page.height - 220) {
+    if (y > pageHeight - 220) {
       doc.addPage();
-      doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
+      doc.rect(0, 0, pageWidth, pageHeight).fill(CREAM);
+      drawPageBackdrop(doc, pageWidth, pageHeight);
       y = 50;
     }
     sectionHeading(
@@ -394,9 +541,10 @@ async function buildReportCardBuffer({
       const dppAcc = c.dpp_attempted
         ? `${Math.round((c.dpp_correct / c.dpp_attempted) * 100)}%`
         : "—";
-      if (y > doc.page.height - 80) {
+      if (y > pageHeight - 80) {
         doc.addPage();
-        doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
+        doc.rect(0, 0, pageWidth, pageHeight).fill(CREAM);
+        drawPageBackdrop(doc, pageWidth, pageHeight);
         y = 50;
       }
       y = drawTableRow(
@@ -415,11 +563,12 @@ async function buildReportCardBuffer({
   }
 
   // ---- Footer / signature ----
-  if (y > doc.page.height - 130) {
+  if (y > pageHeight - 130) {
     doc.addPage();
-    doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
+    doc.rect(0, 0, pageWidth, pageHeight).fill(CREAM);
+    drawPageBackdrop(doc, pageWidth, pageHeight);
   }
-  const footerY = doc.page.height - 110;
+  const footerY = pageHeight - 110;
   doc
     .moveTo(margin, footerY)
     .lineTo(pageWidth - margin, footerY)
@@ -436,7 +585,6 @@ async function buildReportCardBuffer({
       footerY + 12
     );
 
-  // Cursive signature, sitting just above a thin gold flourish rule.
   const sigRight = pageWidth - margin;
   doc
     .fillColor(FOREST_DARK)
