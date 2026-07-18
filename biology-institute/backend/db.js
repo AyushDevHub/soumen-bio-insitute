@@ -39,20 +39,20 @@ async function init() {
 
     CREATE TABLE IF NOT EXISTS students (
       id TEXT PRIMARY KEY,
-      user_id TEXT REFERENCES users(id),
+      user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       class TEXT NOT NULL,
       school_name TEXT NOT NULL,
       guardian_name TEXT NOT NULL,
       guardian_contact TEXT NOT NULL,
       address TEXT NOT NULL,
-      parent_user_id TEXT REFERENCES users(id),
+      parent_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
     CREATE TABLE IF NOT EXISTS marks (
       id TEXT PRIMARY KEY,
-      student_id TEXT NOT NULL REFERENCES students(id),
+      student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
       exam_name TEXT NOT NULL,
       topic TEXT NOT NULL,
       marks_obtained REAL NOT NULL,
@@ -72,7 +72,7 @@ async function init() {
 
     CREATE TABLE IF NOT EXISTS doubts (
       id TEXT PRIMARY KEY,
-      student_id TEXT NOT NULL REFERENCES students(id),
+      student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
       chapter_id TEXT REFERENCES chapters(id),
       question TEXT NOT NULL,
       photo_path TEXT,
@@ -118,8 +118,8 @@ async function init() {
 
     CREATE TABLE IF NOT EXISTS mcq_responses (
       id TEXT PRIMARY KEY,
-      question_id TEXT NOT NULL REFERENCES mcq_questions(id),
-      student_id TEXT NOT NULL REFERENCES students(id),
+      question_id TEXT NOT NULL REFERENCES mcq_questions(id) ON DELETE CASCADE,
+      student_id TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
       chosen_option TEXT NOT NULL,
       is_correct BOOLEAN NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -134,6 +134,35 @@ async function init() {
     ALTER TABLE mcq_sets ADD COLUMN IF NOT EXISTS content_type TEXT NOT NULL DEFAULT 'mcq';
     ALTER TABLE mcq_sets ADD COLUMN IF NOT EXISTS worksheet_path TEXT;
     ALTER TABLE mcq_sets ADD COLUMN IF NOT EXISTS worksheet_public_id TEXT;
+  `);
+
+  // Fix foreign keys on databases created before ON DELETE CASCADE was added,
+  // so deleting a user from Neon (or the admin panel) no longer fails with
+  // "violates foreign key constraint students_user_id_fkey".
+  await pool.query(`
+    ALTER TABLE students DROP CONSTRAINT IF EXISTS students_user_id_fkey;
+    ALTER TABLE students ADD CONSTRAINT students_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+    ALTER TABLE students DROP CONSTRAINT IF EXISTS students_parent_user_id_fkey;
+    ALTER TABLE students ADD CONSTRAINT students_parent_user_id_fkey
+      FOREIGN KEY (parent_user_id) REFERENCES users(id) ON DELETE SET NULL;
+
+    ALTER TABLE marks DROP CONSTRAINT IF EXISTS marks_student_id_fkey;
+    ALTER TABLE marks ADD CONSTRAINT marks_student_id_fkey
+      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE;
+
+    ALTER TABLE doubts DROP CONSTRAINT IF EXISTS doubts_student_id_fkey;
+    ALTER TABLE doubts ADD CONSTRAINT doubts_student_id_fkey
+      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE;
+
+    ALTER TABLE mcq_responses DROP CONSTRAINT IF EXISTS mcq_responses_student_id_fkey;
+    ALTER TABLE mcq_responses ADD CONSTRAINT mcq_responses_student_id_fkey
+      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE;
+
+    ALTER TABLE mcq_responses DROP CONSTRAINT IF EXISTS mcq_responses_question_id_fkey;
+    ALTER TABLE mcq_responses ADD CONSTRAINT mcq_responses_question_id_fkey
+      FOREIGN KEY (question_id) REFERENCES mcq_questions(id) ON DELETE CASCADE;
   `);
 
   console.log("NeonDB (Postgres) schema ready.");
