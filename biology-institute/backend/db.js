@@ -102,6 +102,8 @@ async function init() {
       worksheet_public_id TEXT,
       photo_path TEXT,
       photo_public_id TEXT,
+      positive_marks REAL NOT NULL DEFAULT 1,
+      negative_marks REAL NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
 
@@ -134,6 +136,8 @@ async function init() {
     ALTER TABLE mcq_sets ADD COLUMN IF NOT EXISTS content_type TEXT NOT NULL DEFAULT 'mcq';
     ALTER TABLE mcq_sets ADD COLUMN IF NOT EXISTS worksheet_path TEXT;
     ALTER TABLE mcq_sets ADD COLUMN IF NOT EXISTS worksheet_public_id TEXT;
+    ALTER TABLE mcq_sets ADD COLUMN IF NOT EXISTS positive_marks REAL NOT NULL DEFAULT 1;
+    ALTER TABLE mcq_sets ADD COLUMN IF NOT EXISTS negative_marks REAL NOT NULL DEFAULT 0;
   `);
 
   // Fix foreign keys on databases created before ON DELETE CASCADE was added,

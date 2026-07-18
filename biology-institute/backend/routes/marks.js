@@ -92,17 +92,14 @@ router.get("/report-card/:studentId", authRequired, async (req, res) => {
       [req.params.studentId]
     );
 
-    if (marksRows.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "No marks have been recorded for this student yet." });
-    }
-
-    // Chapter-wise MCQ + DPP performance, pulled straight from quiz activity.
+    // Chapter-wise MCQ + DPP performance, pulled straight from quiz activity,
+    // scored using each set's positive/negative marking scheme.
     const statRows = await query(
       `SELECT
          c.name AS chapter_name,
          ms.content_type,
+         ms.positive_marks,
+         ms.negative_marks,
          COUNT(mq.id)::int AS total_questions,
          COUNT(mr.id)::int AS attempted,
          COUNT(mr.id) FILTER (WHERE mr.is_correct)::int AS correct
@@ -111,12 +108,20 @@ router.get("/report-card/:studentId", authRequired, async (req, res) => {
        JOIN mcq_questions mq ON mq.set_id = ms.id
        LEFT JOIN mcq_responses mr
          ON mr.question_id = mq.id AND mr.student_id = $1
-       GROUP BY c.name, ms.content_type
+       GROUP BY c.name, ms.content_type, ms.positive_marks, ms.negative_marks
        ORDER BY c.name`,
       [req.params.studentId]
     );
 
+    if (marksRows.length === 0 && statRows.every((r) => r.attempted === 0)) {
+      return res.status(400).json({
+        error:
+          "No marks or quiz activity have been recorded for this student yet.",
+      });
+    }
+
     const byChapter = {};
+    const mcqScoreRows = [];
     for (const r of statRows) {
       if (!byChapter[r.chapter_name]) {
         byChapter[r.chapter_name] = {
@@ -129,6 +134,11 @@ router.get("/report-card/:studentId", authRequired, async (req, res) => {
         };
       }
       const bucket = byChapter[r.chapter_name];
+      const wrong = r.attempted - r.correct;
+      const scoreObtained =
+        r.correct * Number(r.positive_marks) - wrong * Number(r.negative_marks);
+      const scoreMax = r.total_questions * Number(r.positive_marks);
+
       if (r.content_type === "mcq") {
         bucket.mcq_total += r.total_questions;
         bucket.mcq_correct += r.correct;
@@ -137,8 +147,22 @@ router.get("/report-card/:studentId", authRequired, async (req, res) => {
         bucket.dpp_attempted += r.attempted;
         bucket.dpp_correct += r.correct;
       }
+
+      // Only fold attempted quizzes into the scored total — an untouched
+      // set shouldn't silently drag the student's percentage down.
+      if (r.attempted > 0) {
+        mcqScoreRows.push({
+          exam_name: `${r.chapter_name} — ${
+            r.content_type === "dpp" ? "DPP" : "MCQ"
+          } Quiz`,
+          topic: "Auto-graded",
+          marks_obtained: Math.max(0, Math.round(scoreObtained * 100) / 100),
+          total_marks: Math.round(scoreMax * 100) / 100,
+        });
+      }
     }
     const chapterStats = Object.values(byChapter);
+    const combinedMarksRows = [...marksRows, ...mcqScoreRows];
 
     const generatedFor = new Date().toLocaleDateString("en-IN", {
       day: "2-digit",
@@ -148,7 +172,7 @@ router.get("/report-card/:studentId", authRequired, async (req, res) => {
 
     const buffer = await buildReportCardBuffer({
       student,
-      marksRows,
+      marksRows: combinedMarksRows,
       chapterStats,
       generatedFor,
     });

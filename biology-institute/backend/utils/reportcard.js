@@ -77,7 +77,7 @@ function sectionHeading(doc, text, x, y, width) {
     .fillColor(FOREST)
     .font("Heading-Bold")
     .fontSize(13)
-    .text(text.toUpperCase(), x, y, { characterSpacing: 1, width });
+    .text(text.toUpperCase(), x, y, { characterSpacing: 1 });
   const ty = doc.y + 3;
   doc
     .moveTo(x, ty)
@@ -88,62 +88,37 @@ function sectionHeading(doc, text, x, y, width) {
   doc.moveDown(0.6);
 }
 
-// Truncate text with an ellipsis so it never wraps/overflows a fixed-height cell.
-function fitText(doc, text, maxWidth) {
-  const str = String(text ?? "");
-  if (doc.widthOfString(str) <= maxWidth) return str;
-  const ell = "…";
-  let lo = 0,
-    hi = str.length;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (doc.widthOfString(str.slice(0, mid) + ell) <= maxWidth) lo = mid;
-    else hi = mid - 1;
-  }
-  return str.slice(0, lo) + ell;
-}
-
-// Row height computed from the actual content instead of a fixed guess,
-// so long topics/chapter names never spill outside the row background.
 function drawTableRow(doc, cols, x, y, colWidths, opts = {}) {
-  const fontSize = opts.fontSize || 9.5;
-  doc.font(opts.header ? "Body-Bold" : "Body").fontSize(fontSize);
-
-  const padX = 8;
-  const padY = 7;
-  let maxLines = 1;
-  cols.forEach((c, i) => {
-    const h = doc.heightOfString(String(c), { width: colWidths[i] - padX * 2 });
-    const lines = Math.max(1, Math.round(h / (fontSize * 1.2)));
-    maxLines = Math.max(maxLines, lines);
-  });
-  const rowHeight = Math.max(
-    opts.height || 23,
-    maxLines * fontSize * 1.25 + padY * 2
-  );
-
-  const totalWidth = colWidths.reduce((a, b) => a + b, 0);
+  const rowHeight = opts.height || 23;
   if (opts.header) {
-    doc.rect(x, y, totalWidth, rowHeight).fill(FOREST);
+    doc
+      .rect(
+        x,
+        y,
+        colWidths.reduce((a, b) => a + b, 0),
+        rowHeight
+      )
+      .fill(FOREST);
   } else if (opts.stripe) {
-    doc.rect(x, y, totalWidth, rowHeight).fill(LEAF_LIGHT);
+    doc
+      .rect(
+        x,
+        y,
+        colWidths.reduce((a, b) => a + b, 0),
+        rowHeight
+      )
+      .fill(LEAF_LIGHT);
   }
-
   let cx = x;
   doc
     .font(opts.header ? "Body-Bold" : "Body")
-    .fontSize(fontSize)
+    .fontSize(opts.fontSize || 9.5)
     .fillColor(opts.header ? WHITE : INK);
   cols.forEach((c, i) => {
-    doc.text(
-      String(c),
-      cx + padX,
-      y + rowHeight / 2 - (maxLines * fontSize * 1.2) / 2 + 2,
-      {
-        width: colWidths[i] - padX * 2,
-        align: opts.aligns ? opts.aligns[i] : "left",
-      }
-    );
+    doc.text(String(c), cx + 8, y + rowHeight / 2 - 5, {
+      width: colWidths[i] - 16,
+      align: opts.aligns ? opts.aligns[i] : "left",
+    });
     cx += colWidths[i];
   });
   return y + rowHeight;
@@ -168,11 +143,6 @@ async function buildReportCardBuffer({
   const margin = 42;
   const contentWidth = pageWidth - margin * 2;
 
-  const newPage = () => {
-    doc.addPage();
-    doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
-  };
-
   // ---- Background & header banner ----
   doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
   doc.rect(0, 0, pageWidth, 132).fill(FOREST);
@@ -181,36 +151,26 @@ async function buildReportCardBuffer({
   drawWatermarkSprig(doc, pageWidth - 90, 260, 1.4);
   drawWatermarkSprig(doc, 70, doc.page.height - 200, 1.2);
 
-  // Emblem: simple circular leaf badge
+  // Emblem: institute logo in the header
+  const logoPath = path.join(__dirname, "..", "assets", "images", "institute-logo.jpeg");
   doc.save();
-  doc.circle(margin + 30, 62, 26).fill(GOLD);
-  doc.circle(margin + 30, 62, 21).fill(FOREST);
-  drawLeaf(doc, margin + 18, 62, 18, -20, GOLD, 1);
-  drawLeaf(doc, margin + 30, 62, 18, 25, GOLD, 0.9);
+  doc.circle(margin + 30, 66, 27).lineWidth(2).stroke(GOLD);
+  doc.circle(margin + 30, 66, 27).clip();
+  doc.image(logoPath, margin + 3, 39, { width: 54, height: 54 });
   doc.restore();
 
-  const titleMaxWidth = pageWidth - margin - 70 - 170; // leave room for the right-aligned block
   doc
     .fillColor(WHITE)
     .font("Heading-Black")
     .fontSize(21)
-    .text(fitText(doc, "SOUMENDRA SIR", titleMaxWidth), margin + 70, 32, {
-      characterSpacing: 0.4,
-      width: titleMaxWidth,
-    });
+    .text("SOUMENDRA SIR", margin + 70, 32, { characterSpacing: 0.4 });
   doc
     .fillColor(GOLD)
     .font("Body-XBold")
     .fontSize(11.5)
-    .text(
-      fitText(doc, "BIOLOGY COACHING INSTITUTE", titleMaxWidth),
-      margin + 70,
-      59,
-      {
-        characterSpacing: 2.2,
-        width: titleMaxWidth,
-      }
-    );
+    .text("BIOLOGY COACHING INSTITUTE", margin + 70, 59, {
+      characterSpacing: 2.2,
+    });
   doc
     .fillColor("#D7E4D2")
     .font("Body")
@@ -218,8 +178,7 @@ async function buildReportCardBuffer({
     .text(
       "Contact: 8910587106   |   Academic Progress Report",
       margin + 70,
-      79,
-      { width: titleMaxWidth }
+      79
     );
 
   doc
@@ -242,13 +201,36 @@ async function buildReportCardBuffer({
 
   let y = 160;
 
+  // Central emblem — Saraswati artwork, framed and centered, elegant divider
+  // between the header and the student details section.
+  const emblemPath = path.join(__dirname, "..", "assets", "images", "saraswati-emblem.jpeg");
+  const emblemSize = 92;
+  const emblemCx = pageWidth / 2;
+  const emblemCy = y + emblemSize / 2;
+  doc.save();
+  doc.circle(emblemCx, emblemCy, emblemSize / 2 + 5).fill(WHITE);
+  doc.circle(emblemCx, emblemCy, emblemSize / 2 + 5).lineWidth(1.6).stroke(GOLD);
+  doc.circle(emblemCx, emblemCy, emblemSize / 2).clip();
+  doc.image(
+    emblemPath,
+    emblemCx - emblemSize / 2,
+    emblemCy - emblemSize / 2,
+    { width: emblemSize, height: emblemSize }
+  );
+  doc.restore();
+  drawLeaf(doc, emblemCx - emblemSize / 2 - 22, emblemCy, 20, 200, GOLD_DARK, 0.8);
+  drawLeaf(doc, emblemCx + emblemSize / 2 + 2, emblemCy, 20, 20, GOLD_DARK, 0.8);
+  y = emblemCy + emblemSize / 2 + 22;
+
   // ---- Student details card ----
   sectionHeading(doc, "Student Details", margin, y, contentWidth);
   y = doc.y + 4;
-
+  const cardH = 78;
+  doc
+    .roundedRect(margin, y, contentWidth, cardH, 8)
+    .fillAndStroke(WHITE, "#E1E8DC");
   const colW = contentWidth / 2;
-  const valueWidth = colW - 32;
-  const rowsData = [
+  const rows = [
     ["Name", student.name, "Class", student.class],
     ["School", student.school_name, "Guardian", student.guardian_name],
     [
@@ -258,30 +240,8 @@ async function buildReportCardBuffer({
       generatedFor,
     ],
   ];
-
-  // Measure each row's real height first (labels are single-line by design;
-  // values can wrap to 2 lines max, then truncate) so the card never clips content.
-  doc.font("Body").fontSize(10.5);
-  const rowHeights = rowsData.map((r) => {
-    const hLeft = doc.heightOfString(fitText(doc, r[1], valueWidth * 2), {
-      width: valueWidth,
-    });
-    const hRight = doc.heightOfString(fitText(doc, r[3], valueWidth * 2), {
-      width: valueWidth,
-    });
-    return Math.max(
-      30,
-      Math.min(hLeft, hRight === hLeft ? hLeft : Math.max(hLeft, hRight)) + 24
-    );
-  });
-  const cardH = 24 + rowHeights.reduce((a, b) => a + b, 0);
-
-  doc
-    .roundedRect(margin, y, contentWidth, cardH, 8)
-    .fillAndStroke(WHITE, "#E1E8DC");
-
   let ry = y + 12;
-  rowsData.forEach((r, i) => {
+  rows.forEach((r) => {
     doc
       .font("Body-Bold")
       .fontSize(8.5)
@@ -291,9 +251,7 @@ async function buildReportCardBuffer({
       .font("Body")
       .fontSize(10.5)
       .fillColor(INK)
-      .text(fitText(doc, r[1], valueWidth * 2), margin + 16, ry + 12, {
-        width: valueWidth,
-      });
+      .text(String(r[1]), margin + 16, ry + 12, { width: colW - 32 });
     doc
       .font("Body-Bold")
       .fontSize(8.5)
@@ -305,10 +263,8 @@ async function buildReportCardBuffer({
       .font("Body")
       .fontSize(10.5)
       .fillColor(INK)
-      .text(fitText(doc, r[3], valueWidth * 2), margin + colW + 8, ry + 12, {
-        width: valueWidth,
-      });
-    ry += rowHeights[i];
+      .text(String(r[3]), margin + colW + 8, ry + 12, { width: colW - 32 });
+    ry += 21;
   });
   y += cardH + 26;
 
@@ -342,10 +298,6 @@ async function buildReportCardBuffer({
     }
   );
   marksRows.forEach((m, i) => {
-    if (y > doc.page.height - 60) {
-      newPage();
-      y = 50;
-    }
     y = drawTableRow(
       doc,
       [m.exam_name, m.topic, m.marks_obtained, m.total_marks],
@@ -358,66 +310,56 @@ async function buildReportCardBuffer({
   y += 14;
 
   // ---- Summary strip: total / percentage / grade badge ----
-  // Three clean columns, nothing floats outside the box.
-  if (y > doc.page.height - 100) {
-    newPage();
-    y = 50;
-  }
-  const stripH = 68;
+  const stripH = 62;
   doc.roundedRect(margin, y, contentWidth, stripH, 8).fill(FOREST);
+  doc
+    .fillColor("#CFE0C9")
+    .font("Body-Bold")
+    .fontSize(8.5)
+    .text("TOTAL OBTAINED", margin + 24, y + 12, { characterSpacing: 0.4 });
+  doc
+    .fillColor(WHITE)
+    .font("Heading-Bold")
+    .fontSize(17)
+    .text(`${totalObtained} / ${totalMax}`, margin + 24, y + 25);
 
-  const col1X = margin + 24;
-  const col2X = margin + contentWidth * 0.38;
-  const badgeCx = margin + contentWidth - 62;
+  doc
+    .fillColor("#CFE0C9")
+    .font("Body-Bold")
+    .fontSize(8.5)
+    .text("PERCENTAGE", margin + 220, y + 12, { characterSpacing: 0.4 });
+  doc
+    .fillColor(WHITE)
+    .font("Heading-Bold")
+    .fontSize(17)
+    .text(`${percentage.toFixed(2)}%`, margin + 220, y + 25);
+
+  // Grade badge (gold circle)
+  const badgeCx = margin + contentWidth - 60;
   const badgeCy = y + stripH / 2;
-
-  doc
-    .fillColor("#CFE0C9")
-    .font("Body-Bold")
-    .fontSize(8.5)
-    .text("TOTAL OBTAINED", col1X, y + 14, { characterSpacing: 0.4 });
-  doc
-    .fillColor(WHITE)
-    .font("Heading-Bold")
-    .fontSize(17)
-    .text(`${totalObtained} / ${totalMax}`, col1X, y + 28);
-
-  doc
-    .fillColor("#CFE0C9")
-    .font("Body-Bold")
-    .fontSize(8.5)
-    .text("PERCENTAGE", col2X, y + 14, { characterSpacing: 0.4 });
-  doc
-    .fillColor(WHITE)
-    .font("Heading-Bold")
-    .fontSize(17)
-    .text(`${percentage.toFixed(2)}%`, col2X, y + 28);
-
-  // Grade badge: circle + letter, with the note stacked directly beneath it,
-  // both centered as one unit so nothing can drift outside the strip.
-  doc.circle(badgeCx, badgeCy - 6, 22).fill(GOLD);
-  doc.circle(badgeCx, badgeCy - 6, 17.5).fill(FOREST_DARK);
+  doc.circle(badgeCx, badgeCy, 26).fill(GOLD);
+  doc.circle(badgeCx, badgeCy, 21).fill(FOREST_DARK);
   doc
     .fillColor(GOLD)
     .font("Heading-Bold")
-    .fontSize(14)
-    .text(grade, badgeCx - 30, badgeCy - 13, { width: 60, align: "center" });
+    .fontSize(16)
+    .text(grade, badgeCx - 20, badgeCy - 10, { width: 40, align: "center" });
   doc
     .fillColor("#CFE0C9")
-    .font("Body-Bold")
-    .fontSize(7.5)
-    .text(fitText(doc, note.toUpperCase(), 100), badgeCx - 60, badgeCy + 20, {
-      width: 120,
-      align: "center",
-      characterSpacing: 0.3,
+    .font("Body")
+    .fontSize(8)
+    .text(note, margin + contentWidth - 150, y + stripH - 16, {
+      width: 130,
+      align: "right",
     });
 
   y += stripH + 26;
 
   // ---- Quiz performance (MCQ + DPP), chapter-wise ----
   if (chapterStats && chapterStats.length > 0) {
-    if (y > doc.page.height - 140) {
-      newPage();
+    if (y > doc.page.height - 220) {
+      doc.addPage();
+      doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
       y = 50;
     }
     sectionHeading(
@@ -453,7 +395,8 @@ async function buildReportCardBuffer({
         ? `${Math.round((c.dpp_correct / c.dpp_attempted) * 100)}%`
         : "—";
       if (y > doc.page.height - 80) {
-        newPage();
+        doc.addPage();
+        doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
         y = 50;
       }
       y = drawTableRow(
@@ -473,7 +416,8 @@ async function buildReportCardBuffer({
 
   // ---- Footer / signature ----
   if (y > doc.page.height - 130) {
-    newPage();
+    doc.addPage();
+    doc.rect(0, 0, pageWidth, doc.page.height).fill(CREAM);
   }
   const footerY = doc.page.height - 110;
   doc
@@ -489,8 +433,7 @@ async function buildReportCardBuffer({
     .text(
       "This report reflects recorded exam marks and quiz activity as of the date of issue.",
       margin,
-      footerY + 12,
-      { width: contentWidth - 220 }
+      footerY + 12
     );
 
   // Cursive signature, sitting just above a thin gold flourish rule.
@@ -498,22 +441,22 @@ async function buildReportCardBuffer({
   doc
     .fillColor(FOREST_DARK)
     .font("Signature")
-    .fontSize(28)
-    .text("S. Sinha", sigRight - 200, footerY + 20, {
+    .fontSize(30)
+    .text("S. Sinha", sigRight - 200, footerY + 24, {
       width: 200,
       align: "right",
     });
 
   doc.save();
   doc
-    .moveTo(sigRight - 170, footerY + 58)
+    .moveTo(sigRight - 170, footerY + 62)
     .bezierCurveTo(
       sigRight - 130,
-      footerY + 64,
+      footerY + 68,
       sigRight - 60,
-      footerY + 52,
+      footerY + 56,
       sigRight,
-      footerY + 58
+      footerY + 62
     )
     .lineWidth(1.1)
     .strokeColor(GOLD_DARK)
@@ -524,7 +467,7 @@ async function buildReportCardBuffer({
     .fillColor(MUTED)
     .font("Body-Bold")
     .fontSize(8.5)
-    .text("SIGNATURE OF BIOLOGY FACULTY", sigRight - 200, footerY + 66, {
+    .text("SIGNATURE OF BIOLOGY FACULTY", sigRight - 200, footerY + 70, {
       width: 200,
       align: "right",
       characterSpacing: 0.6,

@@ -37,8 +37,18 @@ router.post(
         questions,
         chapter_id,
         content_type,
+        positive_marks,
+        negative_marks,
       } = req.body;
       const type = content_type === "dpp" ? "dpp" : "mcq";
+      const posMarks =
+        positive_marks !== undefined && positive_marks !== ""
+          ? Number(positive_marks)
+          : 1;
+      const negMarks =
+        negative_marks !== undefined && negative_marks !== ""
+          ? Number(negative_marks)
+          : 0;
 
       if (!title) {
         return res.status(400).json({ error: "Please provide a title." });
@@ -96,8 +106,8 @@ router.post(
 
       await query(
         `INSERT INTO mcq_sets
-          (id, title, class, chapter_id, content_type, photo_path, photo_public_id, worksheet_path, worksheet_public_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          (id, title, class, chapter_id, content_type, photo_path, photo_public_id, worksheet_path, worksheet_public_id, positive_marks, negative_marks)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [
           setId,
           title,
@@ -108,6 +118,8 @@ router.post(
           photoPublicId,
           worksheetUrl,
           worksheetPublicId,
+          posMarks,
+          negMarks,
         ]
       );
 

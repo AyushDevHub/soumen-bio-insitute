@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [notices, setNotices] = useState([]);
   const [doubts, setDoubts] = useState([]);
   const [error, setError] = useState("");
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -24,11 +25,15 @@ export default function Dashboard() {
         setDoubts(d);
       } catch (err) {
         setError(err.message);
+      } finally {
+        setLoaded(true);
       }
     })();
   }, [token]);
 
   const needsRegistration =
+    loaded &&
+    !error &&
     (user.role === "student" || user.role === "parent") &&
     students.length === 0;
 

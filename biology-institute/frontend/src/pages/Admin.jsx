@@ -580,6 +580,8 @@ function McqTab({ token }) {
   const [className, setClassName] = useState("");
   const [photo, setPhoto] = useState(null);
   const [worksheet, setWorksheet] = useState(null);
+  const [positiveMarks, setPositiveMarks] = useState("1");
+  const [negativeMarks, setNegativeMarks] = useState("0");
   const [questions, setQuestions] = useState([
     { question: "", a: "", b: "", c: "", d: "", correct: "a" },
   ]);
@@ -640,6 +642,8 @@ function McqTab({ token }) {
       fd.append("class", className);
       fd.append("chapter_id", chapterId);
       fd.append("content_type", contentType);
+      fd.append("positive_marks", positiveMarks === "" ? "1" : positiveMarks);
+      fd.append("negative_marks", negativeMarks === "" ? "0" : negativeMarks);
       const usableQuestions = questions.filter((q) => q.question.trim());
       fd.append("questions", JSON.stringify(usableQuestions));
       if (photo) fd.append("photo", photo);
@@ -650,6 +654,8 @@ function McqTab({ token }) {
       setClassName("");
       setPhoto(null);
       setWorksheet(null);
+      setPositiveMarks("1");
+      setNegativeMarks("0");
       setQuestions([
         { question: "", a: "", b: "", c: "", d: "", correct: "a" },
       ]);
@@ -726,6 +732,30 @@ function McqTab({ token }) {
                 value={className}
                 onChange={(e) => setClassName(e.target.value)}
                 placeholder="e.g. Class 10"
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label>Marks per correct answer</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={positiveMarks}
+                onChange={(e) => setPositiveMarks(e.target.value)}
+                placeholder="e.g. 1"
+              />
+            </div>
+            <div className="form-group">
+              <label>Marks deducted per wrong answer</label>
+              <input
+                type="number"
+                step="0.5"
+                min="0"
+                value={negativeMarks}
+                onChange={(e) => setNegativeMarks(e.target.value)}
+                placeholder="0 for no negative marking"
               />
             </div>
           </div>
