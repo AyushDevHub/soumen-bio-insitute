@@ -26,11 +26,9 @@ router.post(
     try {
       const { title, content } = req.body;
       if (!title || !content) {
-        return res
-          .status(400)
-          .json({
-            error: "Please provide a title and content for the notice.",
-          });
+        return res.status(400).json({
+          error: "Please provide a title and content for the notice.",
+        });
       }
       const id = uuid();
       let photoUrl = null;
@@ -53,6 +51,50 @@ router.post(
       res
         .status(500)
         .json({ error: "Something went wrong while publishing the notice." });
+    }
+  }
+);
+
+router.put(
+  "/:id",
+  authRequired,
+  adminOnly,
+  upload.single("photo"),
+  async (req, res) => {
+    try {
+      const { title, content } = req.body;
+      if (!title || !content) {
+        return res.status(400).json({
+          error: "Please provide a title and content for the notice.",
+        });
+      }
+      let photoUrl;
+      let photoPublicId;
+      if (req.file) {
+        const uploaded = await uploadBufferToCloudinary(
+          req.file.buffer,
+          "soumendra-biology-institute/notices"
+        );
+        photoUrl = uploaded.url;
+        photoPublicId = uploaded.publicId;
+      }
+      if (photoUrl) {
+        await query(
+          "UPDATE notices SET title = $1, content = $2, photo_path = $3, photo_public_id = $4 WHERE id = $5",
+          [title, content, photoUrl, photoPublicId, req.params.id]
+        );
+      } else {
+        await query(
+          "UPDATE notices SET title = $1, content = $2 WHERE id = $3",
+          [title, content, req.params.id]
+        );
+      }
+      res.json({ message: "Notice updated." });
+    } catch (e) {
+      console.error(e);
+      res
+        .status(500)
+        .json({ error: "Something went wrong while updating the notice." });
     }
   }
 );

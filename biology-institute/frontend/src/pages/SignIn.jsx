@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
 import { Alert, Spinner } from '../components/Ui.jsx';
@@ -9,8 +9,11 @@ export default function SignIn() {
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
+
+  if (user) return <Navigate to="/dashboard" replace />;
+
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -21,7 +24,7 @@ export default function SignIn() {
     try {
       const { token, user } = await api.signIn(form);
       login(token, user);
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {

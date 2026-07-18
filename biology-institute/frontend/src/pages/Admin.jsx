@@ -264,6 +264,7 @@ function NoticesTab({ token }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   const load = async () => {
     try {
@@ -276,6 +277,22 @@ function NoticesTab({ token }) {
   useEffect(() => {
     load();
   }, []);
+
+  const resetForm = () => {
+    setEditingId(null);
+    setTitle("");
+    setContent("");
+    setPhoto(null);
+  };
+
+  const startEdit = (n) => {
+    setEditingId(n.id);
+    setTitle(n.title);
+    setContent(n.content);
+    setPhoto(null);
+    setMessage("");
+    setError("");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -291,11 +308,14 @@ function NoticesTab({ token }) {
       fd.append("title", title);
       fd.append("content", content);
       if (photo) fd.append("photo", photo);
-      await api.addNotice(fd, token);
-      setMessage("Notice published.");
-      setTitle("");
-      setContent("");
-      setPhoto(null);
+      if (editingId) {
+        await api.updateNotice(editingId, fd, token);
+        setMessage("Notice updated.");
+      } else {
+        await api.addNotice(fd, token);
+        setMessage("Notice published.");
+      }
+      resetForm();
       load();
     } catch (err) {
       setError(err.message);
@@ -305,8 +325,10 @@ function NoticesTab({ token }) {
   };
 
   const remove = async (id) => {
+    if (!window.confirm("Delete this notice? This cannot be undone.")) return;
     try {
       await api.deleteNotice(id, token);
+      if (editingId === id) resetForm();
       load();
     } catch (err) {
       setError(err.message);
@@ -316,7 +338,9 @@ function NoticesTab({ token }) {
   return (
     <div className="two-col">
       <div className="card">
-        <h3 style={{ marginBottom: 14, fontSize: "1rem" }}>Publish a Notice</h3>
+        <h3 style={{ marginBottom: 14, fontSize: "1rem" }}>
+          {editingId ? "Edit Notice" : "Publish a Notice"}
+        </h3>
         <Alert type="error">{error}</Alert>
         <Alert type="success">{message}</Alert>
         <form onSubmit={submit}>
@@ -337,7 +361,9 @@ function NoticesTab({ token }) {
             />
           </div>
           <div className="form-group">
-            <label>Photo (optional)</label>
+            <label>
+              {editingId ? "Replace Photo (optional)" : "Photo (optional)"}
+            </label>
             <input
               type="file"
               accept="image/*"
@@ -345,8 +371,24 @@ function NoticesTab({ token }) {
             />
           </div>
           <button className="btn btn-primary btn-block" disabled={loading}>
-            {loading ? <Spinner /> : "Publish Notice"}
+            {loading ? (
+              <Spinner />
+            ) : editingId ? (
+              "Save Changes"
+            ) : (
+              "Publish Notice"
+            )}
           </button>
+          {editingId && (
+            <button
+              type="button"
+              className="btn btn-block"
+              style={{ marginTop: 8 }}
+              onClick={resetForm}
+            >
+              Cancel Edit
+            </button>
+          )}
         </form>
       </div>
 
@@ -366,12 +408,17 @@ function NoticesTab({ token }) {
                 <div style={{ flex: 1 }}>
                   <h3 className="notice-title">{n.title}</h3>
                   <p>{n.content}</p>
-                  <button
-                    className="btn btn-danger btn-sm"
-                    onClick={() => remove(n.id)}
-                  >
-                    Remove
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn btn-sm" onClick={() => startEdit(n)}>
+                      Edit
+                    </button>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => remove(n.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
