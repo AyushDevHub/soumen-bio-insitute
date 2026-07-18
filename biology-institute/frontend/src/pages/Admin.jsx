@@ -429,6 +429,119 @@ function NoticesTab({ token }) {
   );
 }
 
+// GitHub-style destructive-action confirmation: the admin must type the
+// chapter's exact name before the delete button unlocks. Used both for the
+// plain "empty chapter" case and the "force delete everything" case, which
+// additionally lists what will be wiped (MCQs, DPPs, doubts) in red.
+function DeleteChapterModal({ chapter, onCancel, onConfirm, loading, error }) {
+  const [typed, setTyped] = useState("");
+  const hasLinkedContent =
+    (chapter.mcq_count || 0) > 0 ||
+    (chapter.dpp_count || 0) > 0 ||
+    (chapter.doubt_count || 0) > 0;
+  const canConfirm = typed.trim() === chapter.name;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(17, 24, 18, 0.55)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: 16,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        className="card"
+        style={{
+          maxWidth: 460,
+          width: "100%",
+          border: "1px solid #e0554d",
+          boxShadow: "0 20px 45px -20px rgba(180, 40, 30, 0.4)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 style={{ marginBottom: 6, fontSize: "1.05rem", color: "#b3261e" }}>
+          Delete “{chapter.name}”
+        </h3>
+        <p
+          style={{
+            fontSize: "0.86rem",
+            color: "var(--ink-400)",
+            marginBottom: 12,
+          }}
+        >
+          This action cannot be undone.
+        </p>
+
+        {hasLinkedContent && (
+          <div
+            style={{
+              background: "#fdecea",
+              border: "1px solid #f3b4ae",
+              borderRadius: "var(--radius-sm)",
+              padding: "10px 14px",
+              marginBottom: 14,
+              fontSize: "0.82rem",
+              color: "#7a231d",
+            }}
+          >
+            <strong>This will permanently delete:</strong>
+            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+              {chapter.mcq_count > 0 && <li>{chapter.mcq_count} MCQ set(s)</li>}
+              {chapter.dpp_count > 0 && <li>{chapter.dpp_count} DPP set(s)</li>}
+              {chapter.doubt_count > 0 && (
+                <li>{chapter.doubt_count} student doubt(s)</li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        <p style={{ fontSize: "0.82rem", marginBottom: 6 }}>
+          Type <strong>{chapter.name}</strong> to confirm.
+        </p>
+        <input
+          autoFocus
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          placeholder={chapter.name}
+          style={{ marginBottom: 12 }}
+        />
+
+        <Alert type="error">{error}</Alert>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            className="btn btn-danger btn-sm"
+            disabled={!canConfirm || loading}
+            onClick={onConfirm}
+            style={{ opacity: canConfirm ? 1 : 0.5 }}
+          >
+            {loading ? (
+              <Spinner />
+            ) : hasLinkedContent ? (
+              "Force delete chapter"
+            ) : (
+              "Delete chapter"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ChaptersTab({ token }) {
   const [chapters, setChapters] = useState([]);
   const [name, setName] = useState("");
@@ -437,6 +550,9 @@ export function ChaptersTab({ token }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const load = async () => {
     try {
@@ -476,12 +592,22 @@ export function ChaptersTab({ token }) {
     }
   };
 
-  const remove = async (id) => {
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+    const hasLinkedContent =
+      (pendingDelete.mcq_count || 0) > 0 ||
+      (pendingDelete.dpp_count || 0) > 0 ||
+      (pendingDelete.doubt_count || 0) > 0;
     try {
-      await api.deleteChapter(id, token);
+      await api.deleteChapter(pendingDelete.id, token, hasLinkedContent);
+      setPendingDelete(null);
       load();
     } catch (err) {
-      setError(err.message);
+      setDeleteError(err.message);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -559,7 +685,10 @@ export function ChaptersTab({ token }) {
               </div>
               <button
                 className="btn btn-danger btn-sm"
-                onClick={() => remove(c.id)}
+                onClick={() => {
+                  setDeleteError("");
+                  setPendingDelete(c);
+                }}
               >
                 Remove
               </button>
@@ -567,6 +696,16 @@ export function ChaptersTab({ token }) {
           ))
         )}
       </div>
+
+      {pendingDelete && (
+        <DeleteChapterModal
+          chapter={pendingDelete}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDelete}
+          loading={deleteLoading}
+          error={deleteError}
+        />
+      )}
     </div>
   );
 }

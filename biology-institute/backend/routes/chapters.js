@@ -107,18 +107,44 @@ router.put("/:id", authRequired, adminOnly, async (req, res) => {
   res.json({ message: "Chapter updated." });
 });
 
+// Deleting a chapter that still has MCQs/DPPs/doubts linked to it requires
+// ?force=true. Admins get a GitHub-style "type the chapter name to confirm"
+// prompt on the frontend before this is ever called with force=true — this
+// route is the actual cascade once that's confirmed.
 router.delete("/:id", authRequired, adminOnly, async (req, res) => {
+  const chapter = await queryOne("SELECT * FROM chapters WHERE id = $1", [
+    req.params.id,
+  ]);
+  if (!chapter) return res.status(404).json({ error: "Chapter not found." });
+
   const inUse = await queryOne(
     `SELECT 1 FROM mcq_sets WHERE chapter_id = $1
      UNION SELECT 1 FROM doubts WHERE chapter_id = $1 LIMIT 1`,
     [req.params.id]
   );
-  if (inUse) {
+
+  const force = req.query.force === "true" || req.body?.force === true;
+
+  if (inUse && !force) {
     return res.status(400).json({
       error:
-        "This chapter still has MCQs, DPPs or doubts linked to it. Remove those first.",
+        "This chapter still has MCQs, DPPs or doubts linked to it. Remove those first, or confirm a force delete.",
+      requiresForce: true,
     });
   }
+
+  if (force) {
+    // Cascade: mcq_questions -> mcq_sets, then doubts, then the chapter
+    // itself. mcq_responses has ON DELETE CASCADE from mcq_questions, so
+    // deleting the questions is enough to clear those automatically.
+    await query(
+      `DELETE FROM mcq_questions WHERE set_id IN (SELECT id FROM mcq_sets WHERE chapter_id = $1)`,
+      [req.params.id]
+    );
+    await query(`DELETE FROM mcq_sets WHERE chapter_id = $1`, [req.params.id]);
+    await query(`DELETE FROM doubts WHERE chapter_id = $1`, [req.params.id]);
+  }
+
   await query("DELETE FROM chapters WHERE id = $1", [req.params.id]);
   res.json({ message: "Chapter removed." });
 });

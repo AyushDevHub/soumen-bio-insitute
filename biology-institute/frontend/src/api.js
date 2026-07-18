@@ -107,6 +107,9 @@ export const api = {
     request("/chapters", { method: "POST", body: payload, token }),
   updateChapter: (id, payload, token) =>
     request(`/chapters/${id}`, { method: "PUT", body: payload, token }),
-  deleteChapter: (id, token) =>
-    request(`/chapters/${id}`, { method: "DELETE", token }),
+  deleteChapter: (id, token, force = false) =>
+    request(`/chapters/${id}${force ? "?force=true" : ""}`, {
+      method: "DELETE",
+      token,
+    }),
 };
