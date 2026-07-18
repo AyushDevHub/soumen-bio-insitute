@@ -14,7 +14,16 @@ const chapterRoutes = require("./routes/chapters");
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = (process.env.FRONTEND_URL || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: allowedOrigins.length ? allowedOrigins : true,
+  })
+);
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
@@ -34,15 +43,18 @@ app.get("/api/health", (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
+// Bind the port immediately so Render's health check sees it right away —
+// don't make the whole server wait on the database to be reachable.
+app.listen(PORT, () => {
+  console.log(
+    `Soumendra Sir Biology Coaching Institute backend running on port ${PORT}`
+  );
+});
+
 init()
   .then(() => {
-    app.listen(PORT, () => {
-      console.log(
-        `Soumendra Sir Biology Coaching Institute backend running on port ${PORT}`
-      );
-    });
+    console.log("NeonDB schema ready — database connected.");
   })
   .catch((err) => {
     console.error("Failed to initialize NeonDB schema:", err);
-    process.exit(1);
   });
